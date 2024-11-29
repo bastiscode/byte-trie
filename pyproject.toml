@@ -1,0 +1,33 @@
+[project]
+name = "byte-trie"
+description = "Tries with byte sequences as keys for Python and Rust"
+version = "0.1.0"
+authors = [
+    { name = "Sebastian Walter", email = "swalter@cs.uni-freiburg.de" }
+]
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+
+keywords = ["utilities", "trie", "byte", "rust", "python", "patricia", "art", "radix"]
+
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Text Processing",
+    "Topic :: Utilities"
+]
+
+dependencies = []
+
+[project.urls]
+Github = "https://github.com/bastiscode/byte-trie"
+
+[build-system]
+requires = ["maturin>=1"]
+build-backend = "maturin"
+
+[tool.maturin]
+python-source = "python"
+module-name = "byte_trie._internal"

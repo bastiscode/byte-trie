@@ -28,12 +28,16 @@ impl PyPatriciaTrie {
         self.inner.get(key)
     }
 
-    fn contains(&self, prefix: &[u8]) -> bool {
-        self.inner.contains(prefix)
+    fn contains(&self, key: &[u8]) -> bool {
+        self.inner.contains(key)
     }
 
-    fn values_along_path(&self, prefix: &[u8]) -> Vec<(usize, &PyObject)> {
-        self.inner.values_along_path(prefix)
+    fn contains_prefix(&self, prefix: &[u8]) -> bool {
+        self.inner.contains_prefix(prefix)
+    }
+
+    fn prefix_matches(&self, key: &[u8]) -> Vec<(usize, &PyObject)> {
+        self.inner.prefix_matches(key)
     }
 
     fn continuations(&self, prefix: &[u8]) -> Vec<(Vec<u8>, &PyObject)> {
@@ -68,12 +72,16 @@ impl PyAdaptiveRadixTrie {
         self.inner.get(key)
     }
 
-    fn contains(&self, prefix: &[u8]) -> bool {
-        self.inner.contains(prefix)
+    fn contains(&self, key: &[u8]) -> bool {
+        self.inner.contains(key)
     }
 
-    fn values_along_path(&self, prefix: &[u8]) -> Vec<(usize, &PyObject)> {
-        self.inner.values_along_path(prefix)
+    fn contains_prefix(&self, prefix: &[u8]) -> bool {
+        self.inner.contains_prefix(prefix)
+    }
+
+    fn prefix_matches(&self, key: &[u8]) -> Vec<(usize, &PyObject)> {
+        self.inner.prefix_matches(key)
     }
 
     fn continuations(&self, prefix: &[u8]) -> Vec<(Vec<u8>, &PyObject)> {

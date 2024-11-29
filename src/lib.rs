@@ -14,9 +14,11 @@ pub trait PrefixSearch {
 
     fn get(&self, key: &[u8]) -> Option<&Self::Value>;
 
-    fn contains(&self, prefix: &[u8]) -> bool;
+    fn contains(&self, key: &[u8]) -> bool;
 
-    fn values_along_path(&self, prefix: &[u8]) -> Vec<(usize, &Self::Value)>;
+    fn contains_prefix(&self, prefix: &[u8]) -> bool;
+
+    fn prefix_matches(&self, key: &[u8]) -> Vec<(usize, &Self::Value)>;
 
     fn continuations(
         &self,
@@ -77,19 +79,25 @@ mod test {
             pfx.insert(b"hello", 1);
             pfx.insert(b"hell", 2);
             pfx.insert(b"hello world", 3);
-            assert_eq!(pfx.values_along_path(b""), vec![(0, &4)]);
+            assert_eq!(pfx.prefix_matches(b""), vec![(0, &4)]);
             assert_eq!(
-                pfx.values_along_path(b"hello"),
+                pfx.prefix_matches(b"hello my friend"),
                 vec![(0, &4), (1, &5), (4, &2), (5, &1)]
+            );
+            assert_eq!(
+                pfx.prefix_matches(b"hello world!"),
+                vec![(0, &4), (1, &5), (4, &2), (5, &1), (11, &3)]
             );
             assert_eq!(pfx.get(b"hello"), Some(&1));
             assert_eq!(pfx.get(b"hell"), Some(&2));
             assert_eq!(pfx.get(b"hello world"), Some(&3));
-            assert_eq!(pfx.contains(b"hell"), true);
-            assert_eq!(pfx.contains(b"hello"), true);
-            assert_eq!(pfx.contains(b""), true);
-            assert_eq!(pfx.contains(b"hello world!"), false);
-            assert_eq!(pfx.contains(b"test"), false);
+            assert!(pfx.contains(b"hell"));
+            assert!(!pfx.contains(b"hel"));
+            assert!(pfx.contains_prefix(b"hel"));
+            assert!(pfx.contains(b"hello"));
+            assert!(pfx.contains(b""));
+            assert!(!pfx.contains(b"hello world!"));
+            assert!(!pfx.contains(b"test"));
             assert_eq!(pfx.get(b"hello"), Some(&1));
             assert_eq!(pfx.delete(b"hello"), Some(1));
             assert_eq!(pfx.get(b"hello"), None);
@@ -107,7 +115,7 @@ mod test {
             });
 
             for prefix in &prefixes {
-                let path = pfx.values_along_path(prefix);
+                let path = pfx.prefix_matches(prefix);
                 assert!(path
                     .iter()
                     .all(|&(n, i)| { &prefix[..n] == words[*i].as_bytes() }));
@@ -134,7 +142,7 @@ mod test {
             for (i, word) in words.iter().enumerate() {
                 assert_eq!(pfx.get(word.as_bytes()), Some(&i));
                 let bytes = word.as_bytes();
-                assert!(pfx.contains(&bytes[..=bytes.len() / 2]));
+                assert!(pfx.contains_prefix(&bytes[..=bytes.len() / 2]));
             }
 
             for (i, word) in words.iter().enumerate() {

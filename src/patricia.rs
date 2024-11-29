@@ -373,6 +373,10 @@ impl<V> PrefixSearch for PatriciaTrie<V> {
     }
 
     fn contains(&self, prefix: &[u8]) -> bool {
+        self.get(prefix).is_some()
+    }
+
+    fn contains_prefix(&self, prefix: &[u8]) -> bool {
         let Some(root) = &self.root else {
             return false;
         };
@@ -381,14 +385,14 @@ impl<V> PrefixSearch for PatriciaTrie<V> {
         root.contains_prefix_iter(key, 0).is_some()
     }
 
-    fn values_along_path(&self, prefix: &[u8]) -> Vec<(usize, &Self::Value)> {
+    fn prefix_matches(&self, key: &[u8]) -> Vec<(usize, &Self::Value)> {
         let Some(root) = &self.root else {
             return vec![];
         };
 
         let mut path = vec![];
         let mut node = root;
-        let mut key = prefix.iter().copied();
+        let mut key = key.iter().copied();
         let mut i = 0;
         loop {
             match node.matching(&mut key, 0) {
@@ -417,7 +421,15 @@ impl<V> PrefixSearch for PatriciaTrie<V> {
                     path.push((i + node.prefix.len(), v));
                     break;
                 }
-                Matching::Partial(..) => break,
+                Matching::Partial(n, ..) => {
+                    let NodeType::Leaf(v) = &node.inner else {
+                        break;
+                    };
+                    if n == node.prefix.len() - 1 {
+                        path.push((i + n, v));
+                    }
+                    break;
+                }
             };
         }
         path

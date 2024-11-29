@@ -103,7 +103,7 @@ enum Matching {
     FullKey(usize),
     FullPrefix(u8),
     Exact,
-    Partial(usize, u8),
+    PartialKey(usize, u8),
 }
 
 impl<V> Node<V> {
@@ -143,7 +143,7 @@ impl<V> Node<V> {
                 return Matching::FullKey(i);
             };
             if k != self.prefix[i] {
-                return Matching::Partial(i, k);
+                return Matching::PartialKey(i, k);
             }
             i += 1;
         }
@@ -343,7 +343,7 @@ impl<V> Node<V> {
                 Matching::FullKey(n) => return Some((node, n)),
                 Matching::Exact => return Some((node, node.prefix.len())),
                 Matching::FullPrefix(k) => k,
-                Matching::Partial(..) => break,
+                Matching::PartialKey(..) => break,
             };
             // reset offset after first node
             offset = 0;
@@ -555,7 +555,7 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
     type Value = V;
 
     fn insert(&mut self, key: &[u8], value: V) -> Option<V> {
-        let mut key = key.iter().filter(|&b| *b > 0).copied().chain(once(0));
+        let mut key = key.iter().copied().chain(once(0));
         // empty tree
         let Some(root) = &mut self.root else {
             // insert leaf at root
@@ -576,7 +576,7 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
                     node.set_child(k, Node::new_leaf(key.collect(), value));
                     break;
                 }
-                Matching::Partial(n, k) => {
+                Matching::PartialKey(n, k) => {
                     let inner_prefix = node.prefix[..n].to_vec();
                     let old_prefix = node.prefix[n + 1..].to_vec();
                     let p_k = node.prefix[n];
@@ -617,7 +617,7 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
         }
 
         let mut node = root;
-        let mut key = key.iter().filter(|&b| *b > 0).copied().chain(once(0));
+        let mut key = key.iter().copied().chain(once(0));
         loop {
             let matching = node.matching(&mut key, 0);
 
@@ -655,34 +655,38 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
     fn get(&self, key: &[u8]) -> Option<&V> {
         let root = &self.root.as_ref()?;
 
-        let key = key.iter().filter(|&b| *b > 0).copied().chain(once(0));
+        let key = key.iter().copied().chain(once(0));
         root.find_iter(key).and_then(|node| match &node.inner {
             NodeType::Leaf(v) => Some(v),
             _ => None,
         })
     }
 
-    fn contains(&self, prefix: &[u8]) -> bool {
+    fn contains(&self, key: &[u8]) -> bool {
+        self.get(key).is_some()
+    }
+
+    fn contains_prefix(&self, prefix: &[u8]) -> bool {
         let Some(root) = &self.root else {
             return false;
         };
 
-        let key = prefix.iter().filter(|&b| *b > 0).copied();
+        let key = prefix.iter().copied();
         root.contains_prefix_iter(key, 0).is_some()
     }
 
-    fn values_along_path(&self, prefix: &[u8]) -> Vec<(usize, &Self::Value)> {
+    fn prefix_matches(&self, key: &[u8]) -> Vec<(usize, &Self::Value)> {
         let Some(root) = &self.root else {
             return vec![];
         };
 
         let mut path = vec![];
         let mut node = root;
-        let mut key = prefix.iter().filter(|&b| *b > 0).copied();
+        let mut key = key.iter().copied();
         let mut i = 0;
         loop {
             match node.matching(&mut key, 0) {
-                Matching::FullKey(_) => break,
+                Matching::FullKey(..) => break,
                 Matching::FullPrefix(k) => {
                     i += node.prefix.len();
                     if let Some(leaf) = node.find_child(0) {
@@ -698,6 +702,10 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
                     i += 1;
                 }
                 Matching::Exact => {
+                    if let NodeType::Leaf(v) = &node.inner {
+                        path.push((i + node.prefix.len(), v));
+                        break;
+                    }
                     let Some(child) = node.find_child(0) else {
                         break;
                     };
@@ -707,7 +715,15 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
                     path.push((i + node.prefix.len(), v));
                     break;
                 }
-                Matching::Partial(..) => break,
+                Matching::PartialKey(n, ..) => {
+                    let NodeType::Leaf(v) = &node.inner else {
+                        break;
+                    };
+                    if n == node.prefix.len() - 1 {
+                        path.push((i + n, v));
+                    }
+                    break;
+                }
             };
         }
         path
@@ -718,7 +734,7 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
             return Box::new(empty());
         };
         let mut node = root;
-        let mut key = prefix.iter().filter(|&b| *b > 0).copied();
+        let mut key = prefix.iter().copied();
         let mut prefix = vec![];
         loop {
             let k = match node.matching(&mut key, 0) {
@@ -729,7 +745,7 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
                     prefix.extend(node.prefix.iter().copied());
                     k
                 }
-                Matching::Partial(..) => return Box::new(empty()),
+                Matching::PartialKey(..) => return Box::new(empty()),
             };
 
             let Some(child) = node.find_child(k) else {

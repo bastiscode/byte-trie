@@ -139,4 +139,5 @@ dmypy.json
 
 # Custom
 
+readme.py
 /python/byte_trie/_internal*.so

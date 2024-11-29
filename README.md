@@ -38,22 +38,33 @@ pt.insert(b"hello", 1)
 pt.insert(b"world", 2)
 
 # delete key
-print(pt.delete(b"hello")) # 1
+print(pt.delete(b"hello"))  # 1
 
-# check for key with prefix
-print(pt.contains(b"hel")) # False
-print(pt.contains(b"wor")) # True
+# check for keys and prefixes
+print(pt.contains(b"hello"))  # False
+print(pt.contains(b"world"))  # True
+print(pt.contains(b"wor"))  # False
+print(pt.contains_prefix(b"hel"))  # False
+print(pt.contains_prefix(b"wor"))  # True
 
 # get values
-print(pt.get(b"hello")) # None
-print(pt.get(b"world")) # 2
+print(pt.get(b"hello"))  # None
+print(pt.get(b"world"))  # 2
 
 # overwrite
-print(pt.insert(b"world", 3)) # 2
-print(pt.get(b"world")) # 3
+print(pt.insert(b"world", 3))  # 2
+print(pt.get(b"world"))  # 3
 
 # continuations for prefix
-print(pt.continuations(b"wo")) # [(b'world', 3)]
+print(pt.continuations(b"wo"))  # [(b'world', 3)]
+
+# prefixes of some key, returns list of (prefix length, value) tuples
+key = b"world cup"
+prefix_matches = pt.prefix_matches(key)
+print(prefix_matches)  # [(5, 3)]
+print(
+    [(key[:length].decode(), value) for length, value in prefix_matches]
+)  # [('world', 3)]
 
 # same for ART
 art = AdaptiveRadixTrie()
@@ -61,16 +72,26 @@ art = AdaptiveRadixTrie()
 art.insert(b"hello", 1)
 art.insert(b"world", 2)
 
-print(art.delete(b"hello")) # 1
+print(art.delete(b"hello"))  # 1
 
-print(art.contains(b"hel")) # False
-print(art.contains(b"wor")) # True
+print(art.contains(b"hello"))  # False
+print(art.contains(b"world"))  # True
+print(art.contains(b"wor"))  # False
+print(pt.contains_prefix(b"hel"))  # False
+print(pt.contains_prefix(b"wor"))  # True
 
-print(art.get(b"hello")) # None
-print(art.get(b"world")) # 2
+print(art.get(b"hello"))  # None
+print(art.get(b"world"))  # 2
 
-print(art.insert(b"world", 3)) # 2
-print(art.get(b"world")) # 3
+print(art.insert(b"world", 3))  # 2
+print(art.get(b"world"))  # 3
 
-print(art.continuations(b"wo")) # [(b'world', 3)]
+print(art.continuations(b"wo"))  # [(b'world', 3)]
+
+key = b"world cup"
+prefix_matches = art.prefix_matches(key)
+print(prefix_matches)  # [(5, 3)]
+print(
+    [(key[:length].decode(), value) for length, value in prefix_matches]
+)  # [('world', 3)]
 ```

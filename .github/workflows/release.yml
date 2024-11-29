@@ -27,7 +27,7 @@ jobs:
           args: --release --out dist
       - name: "Python: Install wheels and test import"
         run: |
-          pip install byte-trie --find-links dist --force-reinstall
+          pip install byte-prefix-tree --find-links dist --force-reinstall
           python -c "import byte_trie"
       - name: Upload wheels
         uses: actions/upload-artifact@v3

@@ -1,5 +1,5 @@
 [project]
-name = "byte-trie"
+name = "byte-prefix-tree"
 description = "Tries with byte sequences as keys for Python and Rust"
 version = "0.1.0"
 authors = [

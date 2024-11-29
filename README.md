@@ -5,7 +5,7 @@
 Install from PyPI (only built for Python 3.10+ on Linux)
 
 ```
-pip install byte-trie
+pip install byte-prefix-tree
 ```
 
 ### Manual installation

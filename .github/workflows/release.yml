@@ -52,4 +52,5 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
         run: |
           pip install --upgrade twine
+          pip install --upgrade pkginfo
           twine upload --skip-existing *

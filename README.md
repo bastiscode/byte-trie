@@ -25,15 +25,53 @@ Currently implemented tries:
 - Patricia trie
 - Adaptive radix trie
 
+Key needs to be a bytes object, value can be anything.
+Make sure that the key never ends with a null byte (always the case for text),
+as it is used as a terminator internally.
+
 ```python
 from byte_trie import PatriciaTrie, AdaptiveRadixTrie
 
 pt = PatriciaTrie()
+
+# add key-value pairs
 pt.insert(b"hello", 1)
 pt.insert(b"world", 2)
 
+# delete key
+print(pt.delete(b"hello")) # 1
+
+# check for key with prefix
+print(pt.contains(b"hel")) # False
+print(pt.contains(b"wor")) # True
+
+# get values
+print(pt.get(b"hello")) # None
+print(pt.get(b"world")) # 2
+
+# overwrite
+print(pt.insert(b"world", 3)) # 2
+print(pt.get(b"world")) # 3
+
+# continuations for prefix
+print(pt.continuations(b"wo")) # [(b'world', 3)]
+
+# same for ART
 art = AdaptiveRadixTrie()
+
 art.insert(b"hello", 1)
 art.insert(b"world", 2)
 
+print(art.delete(b"hello")) # 1
+
+print(art.contains(b"hel")) # False
+print(art.contains(b"wor")) # True
+
+print(art.get(b"hello")) # None
+print(art.get(b"world")) # 2
+
+print(art.insert(b"world", 3)) # 2
+print(art.get(b"world")) # 3
+
+print(art.continuations(b"wo")) # [(b'world', 3)]
 ```

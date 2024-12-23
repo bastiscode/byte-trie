@@ -131,6 +131,15 @@ impl<V> Node<V> {
     }
 
     #[inline]
+    fn value(&self) -> Option<&V> {
+        if let NodeType::Leaf(value) = &self.inner {
+            Some(value)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
     fn is_inner(&self) -> bool {
         !self.is_leaf()
     }
@@ -383,7 +392,7 @@ impl<V> Node<V> {
     #[inline]
     fn find_child_mut(&mut self, key: u8) -> Option<&mut Self> {
         match &mut self.inner {
-            NodeType::Leaf(_) => None,
+            NodeType::Leaf(..) => None,
             NodeType::N4(keys, children, num_children) => {
                 for i in 0..*num_children {
                     let i = i as usize;
@@ -538,7 +547,7 @@ impl<V> Node<V> {
     #[inline]
     fn leaves(&self, mut path: Vec<u8>) -> Box<dyn Iterator<Item = (Vec<u8>, &V)> + '_> {
         path.extend(self.prefix.iter().copied());
-        if let NodeType::Leaf(value) = &self.inner {
+        if let Some(value) = self.value() {
             // dont keep last element (null byte) for full paths
             path.pop();
             return Box::new(once((path, value)));
@@ -656,10 +665,7 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
         let root = &self.root.as_ref()?;
 
         let key = key.iter().copied().chain(once(0));
-        root.find_iter(key).and_then(|node| match &node.inner {
-            NodeType::Leaf(v) => Some(v),
-            _ => None,
-        })
+        root.find_iter(key).and_then(|node| node.value())
     }
 
     fn contains(&self, key: &[u8]) -> bool {
@@ -686,13 +692,24 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
         let mut i = 0;
         loop {
             match node.matching(&mut key, 0) {
-                Matching::FullKey(..) => break,
+                Matching::FullKey(n) => {
+                    match node.value() {
+                        Some(v) if n + 1 == node.prefix.len() => {
+                            path.push((i + n, v));
+                        }
+                        None if n == node.prefix.len() => {
+                            let Some(v) = node.find_child(0).and_then(|child| child.value()) else {
+                                break;
+                            };
+                            path.push((i + n, v));
+                        }
+                        _ => break,
+                    }
+                    break;
+                }
                 Matching::FullPrefix(k) => {
                     i += node.prefix.len();
-                    if let Some(leaf) = node.find_child(0) {
-                        let NodeType::Leaf(v) = &leaf.inner else {
-                            unreachable!("should not happen");
-                        };
+                    if let Some(v) = node.find_child(0).and_then(|child| child.value()) {
                         path.push((i, v));
                     }
                     let Some(child) = node.find_child(k) else {
@@ -702,24 +719,18 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
                     i += 1;
                 }
                 Matching::Exact => {
-                    if let NodeType::Leaf(v) = &node.inner {
+                    if let Some(v) = node.value() {
                         path.push((i + node.prefix.len(), v));
-                        break;
+                    } else if let Some(v) = node.find_child(0).and_then(|child| child.value()) {
+                        path.push((i + node.prefix.len(), v));
                     }
-                    let Some(child) = node.find_child(0) else {
-                        break;
-                    };
-                    let NodeType::Leaf(v) = &child.inner else {
-                        unreachable!("should not happen");
-                    };
-                    path.push((i + node.prefix.len(), v));
                     break;
                 }
                 Matching::PartialKey(n, ..) => {
-                    let NodeType::Leaf(v) = &node.inner else {
+                    let Some(v) = node.value() else {
                         break;
                     };
-                    if n == node.prefix.len() - 1 {
+                    if n + 1 == node.prefix.len() {
                         path.push((i + n, v));
                     }
                     break;

@@ -1,13 +1,13 @@
 [package]
 name = "byte-trie"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 publish = false
 
 [dependencies]
 itertools = "0.13"
 serde = { version = "1.0", features = ["derive", "rc"] }
-serde_with = "3.6"
+serde_with = "3.11"
 pyo3 = { version = "0.23", features = ["extension-module"] }
 
 [dev-dependencies]

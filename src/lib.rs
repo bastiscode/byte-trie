@@ -31,7 +31,7 @@ mod test {
     use std::{fs, path::PathBuf};
 
     use itertools::Itertools;
-    use rand::{seq::SliceRandom, Rng};
+    use rand::{seq::SliceRandom, Rng, SeedableRng};
 
     use crate::{AdaptiveRadixTrie, PatriciaTrie, PrefixSearch};
 
@@ -44,14 +44,14 @@ mod test {
 
     fn load_prefixes(words: &[String], n: usize) -> Vec<&[u8]> {
         // sample n random prefixes from the words
-        let mut rng = rand::thread_rng();
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(22);
         words
             .choose_multiple(&mut rng, n)
             .into_iter()
             .map(|s| {
                 let s = s.as_bytes();
                 // choose random prefix length
-                let len = rng.gen_range(0..s.len());
+                let len = rng.gen_range(0..=s.len());
                 &s[..len.max(2).min(s.len())]
             })
             .collect()
@@ -105,7 +105,7 @@ mod test {
     }
 
     #[test]
-    fn test_path() {
+    fn test_prefix_matches() {
         let words = load_words();
         let prefixes = load_prefixes(&words, 1000);
 
@@ -116,11 +116,27 @@ mod test {
 
             for prefix in &prefixes {
                 let path = pfx.prefix_matches(prefix);
-                assert!(path
+                let path_words: Vec<_> = path
                     .iter()
-                    .all(|&(n, i)| { &prefix[..n] == words[*i].as_bytes() }));
+                    .map(|(n, &i)| (&prefix[..*n], words[i].as_bytes()))
+                    .collect();
+                assert!(
+                    path_words.iter().all(|&(p, w)| p == w),
+                    "{:?}",
+                    path_words
+                        .iter()
+                        .map(|(p, w)| { (String::from_utf8_lossy(p), String::from_utf8_lossy(w)) })
+                        .collect::<Vec<_>>()
+                );
                 for (i, word) in words.iter().enumerate() {
-                    if prefix.starts_with(word.as_bytes()) {
+                    if *prefix == word.as_bytes() {
+                        assert!(
+                            path.last() == Some(&(word.len(), &i)),
+                            "last of {:?} not equal to ({}, {i})",
+                            path,
+                            word.len()
+                        );
+                    } else if prefix.starts_with(word.as_bytes()) {
                         assert!(path.iter().any(|(_, &idx)| idx == i));
                     } else {
                         assert!(path.iter().all(|(_, &idx)| idx != i));

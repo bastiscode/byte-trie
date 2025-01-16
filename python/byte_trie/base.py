@@ -8,6 +8,13 @@ class ByteTrie:
 
     """
 
+    def __len__(self) -> int:
+        """
+
+        Get the number of key-value pairs in the trie.
+
+        """
+
     def insert(self, key: bytes, value: Any) -> Any | None:
         """
 

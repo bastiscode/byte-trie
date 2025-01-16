@@ -26,7 +26,7 @@ Currently implemented tries:
 - Adaptive radix trie
 
 Key needs to be a bytes object, value can be anything.
-Make sure that the key never contains a null/zero byte, as it is used as a terminator internally. For utf8-encoded text this usually is the case, but for other types of data you might need to encode it in a way that ensures this.
+Make sure that the key never contains a 255 byte, as it is used as a terminator internally. For utf8-encoded text this is always the case, but for other types of data you might need to encode it in a way that ensures this.
 
 ```python
 from byte_trie import PatriciaTrie, AdaptiveRadixTrie

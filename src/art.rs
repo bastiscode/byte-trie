@@ -74,7 +74,7 @@ impl<V> AdaptiveRadixTrie<V> {
                 NodeType::N48 { .. } => "n48",
                 NodeType::N256 { .. } => "n256",
             };
-            let val = dist.get_mut(name).unwrap();
+            let val = dist.get_mut(name).expect("cannot happen");
             val.0 += 1;
             let n = val.0 as f32;
             val.1 = (val.1 * (n - 1.0) + node.prefix.len() as f32) / n;
@@ -140,6 +140,15 @@ impl<V> Node<V> {
     }
 
     #[inline]
+    fn values(&self) -> Box<dyn Iterator<Item = &V> + '_> {
+        if let Some(v) = self.value() {
+            Box::new(once(v))
+        } else {
+            Box::new(self.children().flat_map(|(_, child)| child.values()))
+        }
+    }
+
+    #[inline]
     fn is_inner(&self) -> bool {
         !self.is_leaf()
     }
@@ -201,22 +210,25 @@ impl<V> Node<V> {
                     .iter()
                     .copied()
                     .zip(&children[..*num_children as usize])
-                    .map(|(k, child)| (k, child.as_deref().unwrap())),
+                    .flat_map(|(k, child)| child.as_deref().map(|child| (k, child))),
             ),
             NodeType::N16(keys, children, num_children) => Box::new(
                 keys[..*num_children as usize]
                     .iter()
                     .copied()
                     .zip(&children[..*num_children as usize])
-                    .map(|(k, child)| (k, child.as_deref().unwrap())),
+                    .flat_map(|(k, child)| child.as_deref().map(|child| (k, child))),
             ),
             NodeType::N48 {
                 index,
                 children,
                 num_children,
-            } => Box::new(index.iter().enumerate().filter_map(|(i, &idx)| {
+            } => Box::new(index.iter().enumerate().flat_map(|(i, &idx)| {
                 if idx < *num_children {
-                    Some((i as u8, children[idx as usize].as_deref().unwrap()))
+                    children
+                        .get(idx as usize)
+                        .and_then(|child| child.as_deref())
+                        .map(|child| (i as u8, child))
                 } else {
                     None
                 }
@@ -242,7 +254,9 @@ impl<V> Node<V> {
             NodeType::N4(keys, children, num_children) => {
                 // also keep sorted order for n4 for easier upgrade
                 let n = *num_children as usize;
-                let idx = keys[..n].binary_search(&key).unwrap_err();
+                let idx = keys[..n]
+                    .binary_search(&key)
+                    .expect_err("should not happen");
                 if idx < n {
                     keys[idx..].rotate_right(1);
                     children[idx..].rotate_right(1);
@@ -253,7 +267,7 @@ impl<V> Node<V> {
             }
             NodeType::N16(keys, children, num_children) => {
                 let n = *num_children as usize;
-                let idx = keys[..n].binary_search(&key).unwrap_err();
+                let idx = keys[..n].binary_search(&key).expect("should not happen");
                 if idx < n {
                     keys[idx..].rotate_right(1);
                     children[idx..].rotate_right(1);
@@ -288,18 +302,18 @@ impl<V> Node<V> {
             NodeType::Leaf(_) => unreachable!("should not happen"),
             NodeType::N4(keys, children, num_children) => {
                 let n = *num_children as usize;
-                let idx = keys[..n].binary_search(&key).unwrap();
+                let idx = keys[..n].binary_search(&key).expect("should not happen");
                 keys[idx..].rotate_left(1);
-                let child = children[idx].take().unwrap();
+                let child = children[idx].take().expect("should not happen");
                 children[idx..].rotate_left(1);
                 *num_children -= 1;
                 child
             }
             NodeType::N16(keys, children, num_children) => {
                 let n = *num_children as usize;
-                let idx = keys[..n].binary_search(&key).unwrap();
+                let idx = keys[..n].binary_search(&key).expect("should not happen");
                 keys[idx..].rotate_left(1);
-                let child = children[idx].take().unwrap();
+                let child = children[idx].take().expect("should not happen");
                 children[idx..].rotate_left(1);
                 *num_children -= 1;
                 child
@@ -318,7 +332,7 @@ impl<V> Node<V> {
                     }
                 });
                 let idx = idx as usize;
-                let child = children[idx].take().unwrap();
+                let child = children[idx].take().expect("should not happen");
                 children[idx..].rotate_left(1);
                 *num_children -= 1;
                 child
@@ -328,7 +342,7 @@ impl<V> Node<V> {
                 num_children,
             } => {
                 *num_children -= 1;
-                children[key as usize].take().unwrap()
+                children[key as usize].take().expect("should not happen")
             }
         };
         // potentially downgrade the current node after removal, will change
@@ -529,7 +543,7 @@ impl<V> Node<V> {
     fn merge(&mut self) {
         let (k, child) = match &mut self.inner {
             NodeType::N4(keys, children, num_children) if *num_children == 1 => {
-                (keys[0], children[0].take().unwrap())
+                (keys[0], children[0].take().expect("should not happen"))
             }
             _ => return,
         };
@@ -545,17 +559,17 @@ impl<V> Node<V> {
     }
 
     #[inline]
-    fn leaves(&self, mut path: Vec<u8>) -> Box<dyn Iterator<Item = (Vec<u8>, &V)> + '_> {
-        path.extend(self.prefix.iter().copied());
+    fn continuations(&self, mut prefix: Vec<u8>) -> Box<dyn Iterator<Item = (Vec<u8>, &V)> + '_> {
+        prefix.extend(self.prefix.iter().copied());
         if let Some(value) = self.value() {
             // dont keep last element (null byte) for full paths
-            path.pop();
-            return Box::new(once((path, value)));
+            prefix.pop();
+            return Box::new(once((prefix, value)));
         }
         Box::new(self.children().flat_map(move |(k, child)| {
-            let mut key = path.clone();
-            key.push(k);
-            child.leaves(key)
+            let mut prefix = prefix.clone();
+            prefix.push(k);
+            child.continuations(prefix)
         }))
     }
 }
@@ -564,7 +578,7 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
     type Value = V;
 
     fn insert(&mut self, key: &[u8], value: V) -> Option<V> {
-        let mut key = key.iter().copied().chain(once(0));
+        let mut key = key.iter().copied().chain(once(u8::MAX));
         // empty tree
         let Some(root) = &mut self.root else {
             // insert leaf at root
@@ -579,7 +593,7 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
                     // full prefix match, either go to next child
                     // or append leaf with rest of key
                     if node.has_child(k) {
-                        node = node.find_child_mut(k).unwrap();
+                        node = node.find_child_mut(k).expect("should not happen");
                         continue;
                     }
                     node.set_child(k, Node::new_leaf(key.collect(), value));
@@ -626,7 +640,7 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
         }
 
         let mut node = root;
-        let mut key = key.iter().copied().chain(once(0));
+        let mut key = key.iter().copied().chain(once(u8::MAX));
         loop {
             let matching = node.matching(&mut key, 0);
 
@@ -664,7 +678,7 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
     fn get(&self, key: &[u8]) -> Option<&V> {
         let root = &self.root.as_ref()?;
 
-        let key = key.iter().copied().chain(once(0));
+        let key = key.iter().copied().chain(once(u8::MAX));
         root.find_iter(key).and_then(|node| node.value())
     }
 
@@ -698,7 +712,8 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
                             path.push((i + n, v));
                         }
                         None if n == node.prefix.len() => {
-                            let Some(v) = node.find_child(0).and_then(|child| child.value()) else {
+                            let Some(v) = node.find_child(u8::MAX).and_then(|child| child.value())
+                            else {
                                 break;
                             };
                             path.push((i + n, v));
@@ -709,7 +724,7 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
                 }
                 Matching::FullPrefix(k) => {
                     i += node.prefix.len();
-                    if let Some(v) = node.find_child(0).and_then(|child| child.value()) {
+                    if let Some(v) = node.find_child(u8::MAX).and_then(|child| child.value()) {
                         path.push((i, v));
                     }
                     let Some(child) = node.find_child(k) else {
@@ -721,7 +736,8 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
                 Matching::Exact => {
                     if let Some(v) = node.value() {
                         path.push((i + node.prefix.len(), v));
-                    } else if let Some(v) = node.find_child(0).and_then(|child| child.value()) {
+                    } else if let Some(v) = node.find_child(u8::MAX).and_then(|child| child.value())
+                    {
                         path.push((i + node.prefix.len(), v));
                     }
                     break;
@@ -766,7 +782,15 @@ impl<V> PrefixSearch for AdaptiveRadixTrie<V> {
             node = child;
         }
 
-        node.leaves(prefix)
+        node.continuations(prefix)
+    }
+
+    fn len(&self) -> usize {
+        // count all leaves
+        let Some(root) = &self.root else {
+            return 0;
+        };
+        root.values().count()
     }
 }
 

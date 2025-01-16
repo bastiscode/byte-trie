@@ -1,7 +1,7 @@
 [project]
 name = "byte-prefix-tree"
 description = "Tries with byte sequences as keys for Python and Rust"
-version = "0.2.0"
+version = "0.3.0"
 authors = [
     { name = "Sebastian Walter", email = "swalter@cs.uni-freiburg.de" }
 ]

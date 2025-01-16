@@ -16,6 +16,10 @@ impl PyPatriciaTrie {
         }
     }
 
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
     fn insert(&mut self, key: &[u8], value: PyObject) -> Option<PyObject> {
         self.inner.insert(key, value)
     }
@@ -58,6 +62,10 @@ impl PyAdaptiveRadixTrie {
         Self {
             inner: AdaptiveRadixTrie::default(),
         }
+    }
+
+    fn __len__(&self) -> usize {
+        self.inner.len()
     }
 
     fn insert(&mut self, key: &[u8], value: PyObject) -> Option<PyObject> {

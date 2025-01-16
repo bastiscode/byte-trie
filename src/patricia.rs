@@ -108,6 +108,14 @@ impl<V> Node<V> {
         }
     }
 
+    fn values(&self) -> Box<dyn Iterator<Item = &V> + '_> {
+        if let NodeType::Leaf(value) = &self.inner {
+            Box::new(once(value))
+        } else {
+            Box::new(self.children().flat_map(|(_, child)| child.values()))
+        }
+    }
+
     #[inline]
     fn is_inner(&self) -> bool {
         !self.is_leaf()
@@ -234,7 +242,7 @@ impl<V> Node<V> {
     }
 
     #[inline]
-    fn leaves(&self, mut path: Vec<u8>) -> Box<dyn Iterator<Item = (Vec<u8>, &V)> + '_> {
+    fn continuations(&self, mut path: Vec<u8>) -> Box<dyn Iterator<Item = (Vec<u8>, &V)> + '_> {
         path.extend(self.prefix.iter().copied());
         if let Some(value) = self.value() {
             // dont keep last element (null byte) for full paths
@@ -244,7 +252,7 @@ impl<V> Node<V> {
         Box::new(self.children().flat_map(move |(k, child)| {
             let mut key = path.clone();
             key.push(k);
-            child.leaves(key)
+            child.continuations(key)
         }))
     }
 }
@@ -253,7 +261,7 @@ impl<V> PrefixSearch for PatriciaTrie<V> {
     type Value = V;
 
     fn insert(&mut self, key: &[u8], value: V) -> Option<V> {
-        let mut key = key.iter().copied().chain(once(0));
+        let mut key = key.iter().copied().chain(once(u8::MAX));
         // empty tree
         let Some(root) = &mut self.root else {
             // insert leaf at root
@@ -268,7 +276,7 @@ impl<V> PrefixSearch for PatriciaTrie<V> {
                     // full prefix match, either go to next child
                     // or append leaf with rest of key
                     if node.has_child(k) {
-                        node = node.find_child_mut(k).unwrap();
+                        node = node.find_child_mut(k).expect("should not happen");
                         continue;
                     }
                     node.set_child(k, Node::new_leaf(key.collect(), value));
@@ -315,7 +323,7 @@ impl<V> PrefixSearch for PatriciaTrie<V> {
         }
 
         let mut node = root;
-        let mut key = key.iter().copied().chain(once(0));
+        let mut key = key.iter().copied().chain(once(u8::MAX));
         loop {
             let matching = node.matching(&mut key, 0);
 
@@ -341,7 +349,7 @@ impl<V> PrefixSearch for PatriciaTrie<V> {
             let NodeType::Inner(children) = &mut node.inner else {
                 unreachable!("should not happen");
             };
-            let child = children[k as usize].take().unwrap();
+            let child = children[k as usize].take().expect("should not happen");
             let NodeType::Leaf(value) = child.inner else {
                 unreachable!("should not happen");
             };
@@ -354,8 +362,8 @@ impl<V> PrefixSearch for PatriciaTrie<V> {
             if child_indices.len() == 1 {
                 // if we only have one child left, we can merge
                 // the child into the current node
-                let single_child_k = child_indices.into_iter().next().unwrap();
-                let single_child = children[single_child_k].take().unwrap();
+                let single_child_k = child_indices.into_iter().next().expect("should not happen");
+                let single_child = children[single_child_k].take().expect("should not happen");
                 let new_prefix: Vec<_> = node
                     .prefix
                     .iter()
@@ -374,7 +382,7 @@ impl<V> PrefixSearch for PatriciaTrie<V> {
     fn get(&self, key: &[u8]) -> Option<&V> {
         let root = &self.root.as_ref()?;
 
-        let key = key.iter().copied().chain(once(0));
+        let key = key.iter().copied().chain(once(u8::MAX));
         root.find_iter(key).and_then(|node| node.value())
     }
 
@@ -408,7 +416,8 @@ impl<V> PrefixSearch for PatriciaTrie<V> {
                             path.push((i + n, v));
                         }
                         None if n == node.prefix.len() => {
-                            let Some(v) = node.find_child(0).and_then(|child| child.value()) else {
+                            let Some(v) = node.find_child(u8::MAX).and_then(|child| child.value())
+                            else {
                                 break;
                             };
                             path.push((i + n, v));
@@ -419,7 +428,7 @@ impl<V> PrefixSearch for PatriciaTrie<V> {
                 }
                 Matching::FullPrefix(k) => {
                     i += node.prefix.len();
-                    if let Some(v) = node.find_child(0).and_then(|child| child.value()) {
+                    if let Some(v) = node.find_child(u8::MAX).and_then(|child| child.value()) {
                         path.push((i, v));
                     }
                     let Some(child) = node.find_child(k) else {
@@ -431,7 +440,8 @@ impl<V> PrefixSearch for PatriciaTrie<V> {
                 Matching::Exact => {
                     if let Some(v) = node.value() {
                         path.push((i + node.prefix.len(), v));
-                    } else if let Some(v) = node.find_child(0).and_then(|child| child.value()) {
+                    } else if let Some(v) = node.find_child(u8::MAX).and_then(|child| child.value())
+                    {
                         path.push((i + node.prefix.len(), v));
                     }
                     break;
@@ -476,7 +486,15 @@ impl<V> PrefixSearch for PatriciaTrie<V> {
             node = child;
         }
 
-        node.leaves(prefix)
+        node.continuations(prefix)
+    }
+
+    fn len(&self) -> usize {
+        // count all leaves
+        let Some(root) = &self.root else {
+            return 0;
+        };
+        root.values().count()
     }
 }
 

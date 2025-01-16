@@ -24,6 +24,12 @@ pub trait PrefixSearch {
         &self,
         prefix: &[u8],
     ) -> Box<dyn Iterator<Item = (Vec<u8>, &Self::Value)> + '_>;
+
+    fn len(&self) -> usize;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[cfg(test)]

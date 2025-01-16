@@ -267,7 +267,9 @@ impl<V> Node<V> {
             }
             NodeType::N16(keys, children, num_children) => {
                 let n = *num_children as usize;
-                let idx = keys[..n].binary_search(&key).expect("should not happen");
+                let idx = keys[..n]
+                    .binary_search(&key)
+                    .expect_err("should not happen");
                 if idx < n {
                     keys[idx..].rotate_right(1);
                     children[idx..].rotate_right(1);
